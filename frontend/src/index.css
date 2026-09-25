@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
+
+  /* Brand palette */
+  --color-saffron-50:  #fff8ed;
+  --color-saffron-100: #ffeed4;
+  --color-saffron-200: #ffd9a8;
+  --color-saffron-300: #ffbd70;
+  --color-saffron-400: #ff9737;
+  --color-saffron-500: #ff7a0f;
+  --color-saffron-600: #f05e05;
+  --color-saffron-700: #c74506;
+  --color-saffron-800: #9e360d;
+  --color-saffron-900: #7f2e0e;
+
+  --color-emerald-india-50:  #ecfdf5;
+  --color-emerald-india-500: #10b981;
+  --color-emerald-india-600: #059669;
+
+  --color-navy-900: #0f1629;
+  --color-navy-800: #1a2340;
+  --color-navy-700: #243057;
+
+  --color-glass-bg: rgba(255, 255, 255, 0.07);
+  --color-glass-border: rgba(255, 255, 255, 0.12);
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-sans);
+  background-color: #0f1629;
+  color: #f1f5f9;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #1a2340; }
+::-webkit-scrollbar-thumb { background: #ff7a0f; border-radius: 3px; }
+
+/* ─── Glassmorphism card ────────────────────────────────────────────────────── */
+.glass-card {
+  background: var(--color-glass-bg);
+  border: 1px solid var(--color-glass-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ─── Gradient text ─────────────────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #ff9737 0%, #ff7a0f 50%, #f05e05 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-gold {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Hero gradient background ──────────────────────────────────────────────── */
+.hero-bg {
+  background: radial-gradient(ellipse at 20% 50%, rgba(255, 122, 15, 0.15) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+              linear-gradient(180deg, #0f1629 0%, #1a2340 100%);
+}
+
+/* ─── Animated shimmer ──────────────────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg, #1a2340 25%, #243057 50%, #1a2340 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Destination card hover ─────────────────────────────────────────────────── */
+.destination-card {
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease;
+}
+.destination-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 24px 60px rgba(255, 122, 15, 0.2);
+}
+
+/* ─── Glow button ────────────────────────────────────────────────────────────── */
+.btn-glow {
+  background: linear-gradient(135deg, #ff9737, #ff7a0f);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(255, 122, 15, 0.3);
+}
+.btn-glow:hover {
+  box-shadow: 0 8px 30px rgba(255, 122, 15, 0.5);
+  transform: translateY(-2px);
+}
+.btn-glow:active { transform: translateY(0); }
+
+/* ─── Input field ────────────────────────────────────────────────────────────── */
+.input-field {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #f1f5f9;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-field:focus {
+  outline: none;
+  border-color: #ff7a0f;
+  box-shadow: 0 0 0 3px rgba(255, 122, 15, 0.15);
+}
+.input-field::placeholder { color: rgba(241,245,249,0.4); }
+
+/* ─── Star rating ────────────────────────────────────────────────────────────── */
+.star-filled { color: #f59e0b; }
+.star-empty  { color: rgba(255,255,255,0.2); }
+
+/* ─── Badge ──────────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.badge-saffron {
+  background: rgba(255,122,15,0.15);
+  color: #ff9737;
+  border: 1px solid rgba(255,122,15,0.3);
+}
+.badge-emerald {
+  background: rgba(16,185,129,0.15);
+  color: #10b981;
+  border: 1px solid rgba(16,185,129,0.3);
+}
+
+/* ─── Page fade-in ───────────────────────────────────────────────────────────── */
+.page-enter {
+  animation: fadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Floating orbs (hero decoration) ──────────────────────────────────────── */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: float 8s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-30px) scale(1.05); }
+}
+
+/* ─── Multi-point itinerary UI ──────────────────────────────────────────────── */
+
+/* Interest / tag chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: #94a3b8;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.chip:hover {
+  border-color: rgba(255,122,15,0.4);
+  color: #ff9737;
+  background: rgba(255,122,15,0.08);
+}
+.chip.chip-active {
+  border-color: rgba(255,122,15,0.6);
+  color: #ff9737;
+  background: rgba(255,122,15,0.15);
+}
+
+/* Timeline vertical connector */
+.timeline-line {
+  position: relative;
+}
+.timeline-line::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 40px;
+  bottom: -12px;
+  width: 2px;
+  background: linear-gradient(to bottom, rgba(255,122,15,0.5), rgba(255,122,15,0.05));
+}
+
+/* Day card enhanced */
+.day-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.day-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(255,122,15,0.12);
+}
+
+/* Budget meter */
+.budget-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.budget-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.8s cubic-bezier(0.34,1.56,0.64,1);
+}
+.budget-meter-fill.safe    { background: linear-gradient(90deg, #10b981, #059669); }
+.budget-meter-fill.warning { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.budget-meter-fill.danger  { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+/* Loading progress steps */
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #475569;
+  transition: color 0.3s ease;
+}
+.progress-step.done    { color: #10b981; }
+.progress-step.active  { color: #ff9737; }
+.progress-step .step-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  border: 1.5px solid currentColor;
+}
+.progress-step.done .step-icon    { background: rgba(16,185,129,0.2); }
+.progress-step.active .step-icon  { background: rgba(255,122,15,0.2); animation: pulse-ring 1s ease infinite; }
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,122,15,0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(255,122,15,0); }
+}
+
+/* Section label */
+.section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* Activity time badge */
+.time-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255,122,15,0.12);
+  color: #ff9737;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Cost tag */
+.cost-tag {
+  font-size: 0.65rem;
+  color: #10b981;
+  background: rgba(16,185,129,0.1);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+/* Meal icon row */
+.meal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Reorder buttons */
+.reorder-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.reorder-btn:hover {
+  border-color: rgba(255,122,15,0.4);
+  color: #ff9737;
+  background: rgba(255,122,15,0.08);
+}
+
