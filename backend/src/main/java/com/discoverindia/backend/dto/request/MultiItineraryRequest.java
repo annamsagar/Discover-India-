@@ -16,6 +16,8 @@ public class MultiItineraryRequest {
     @NotEmpty(message = "Please add at least one destination")
     private List<String> destinations;
 
+    private java.util.Map<String, java.util.Map<String, Double>> selectedLocations;
+
     private String startDate;           // ISO date string, optional
 
     @Positive

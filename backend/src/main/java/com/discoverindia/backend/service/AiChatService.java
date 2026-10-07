@@ -99,7 +99,8 @@ public class AiChatService {
                     request.getStartLocation(),
                     request.getDestinations(),
                     request.getDays(),
-                    request.getPace()
+                    request.getPace(),
+                    request.getSelectedLocations()
             );
 
             // 2. Budget estimation (includes per-category explanations)
@@ -321,23 +322,15 @@ public class AiChatService {
             List<DayPlan> days = rawDays.stream().map(this::parseDayPlan).toList();
 
             // Parse map locations — merge AI locations with route optimization coords
-            List<Map<String, Object>> rawLocs = (List<Map<String, Object>>) parsed.getOrDefault("mapLocations", List.of());
             List<MapLocation> mapLocations = new ArrayList<>();
             if (!route.orderedPoints().isEmpty()) {
-                RouteOptimizationService.GeoPoint start = route.orderedPoints().get(0);
-                mapLocations.add(MapLocation.builder()
-                        .name(start.name()).lat(start.lat()).lng(start.lng())
-                        .description("Starting point").type("start").dayNumber(0).build());
-            }
-            for (Map<String, Object> loc : rawLocs) {
-                mapLocations.add(MapLocation.builder()
-                        .name(str(loc, "name"))
-                        .lat(num(loc, "lat"))
-                        .lng(num(loc, "lng"))
-                        .description(str(loc, "description"))
-                        .type(str(loc, "type", "destination"))
-                        .dayNumber(intVal(loc, "dayNumber"))
-                        .build());
+                for (int i = 0; i < route.orderedPoints().size(); i++) {
+                    RouteOptimizationService.GeoPoint pt = route.orderedPoints().get(i);
+                    mapLocations.add(MapLocation.builder()
+                            .name(pt.name()).lat(pt.lat()).lng(pt.lng())
+                            .description(i == 0 ? "Starting point" : "Destination " + i)
+                            .type(i == 0 ? "start" : "destination").dayNumber(i).build());
+                }
             }
 
             // ── Parse aiReasoning block ──────────────────────────────────────

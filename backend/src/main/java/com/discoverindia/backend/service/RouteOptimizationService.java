@@ -43,13 +43,13 @@ public class RouteOptimizationService {
      * @param totalDays      e.g. 7
      * @param pace           "relaxed" | "balanced" | "fast"
      */
-    public OptimizedRoute optimize(String startLocation, List<String> destinations, int totalDays, String pace) {
+    public OptimizedRoute optimize(String startLocation, List<String> destinations, int totalDays, String pace, Map<String, Map<String, Double>> selectedLocations) {
         // 1. Geocode all locations
         List<String> allLocations = new ArrayList<>();
         allLocations.add(startLocation);
         allLocations.addAll(destinations);
 
-        List<GeoPoint> points = geocodeAll(allLocations);
+        List<GeoPoint> points = geocodeAll(allLocations, selectedLocations);
 
         if (points.isEmpty()) {
             return fallbackRoute(startLocation, destinations, totalDays, pace);
@@ -90,10 +90,19 @@ public class RouteOptimizationService {
     // Geocoding via Nominatim
     // ─────────────────────────────────────────────────────────────────────────
 
-    private List<GeoPoint> geocodeAll(List<String> names) {
+    private List<GeoPoint> geocodeAll(List<String> names, Map<String, Map<String, Double>> selectedLocations) {
         List<GeoPoint> result = new ArrayList<>();
         for (String name : names) {
-            GeoPoint pt = geocode(name);
+            GeoPoint pt = null;
+            if (selectedLocations != null && selectedLocations.containsKey(name)) {
+                Map<String, Double> coords = selectedLocations.get(name);
+                if (coords != null && coords.containsKey("lat") && coords.containsKey("lng")) {
+                    pt = new GeoPoint(name, coords.get("lat"), coords.get("lng"));
+                }
+            }
+            if (pt == null) {
+                pt = geocode(name);
+            }
             if (pt != null) {
                 result.add(pt);
             } else {

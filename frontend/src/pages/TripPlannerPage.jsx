@@ -123,6 +123,45 @@ function RouteLayer({ locations }) {
   return <Polyline positions={routePoints} pathOptions={{ color: '#f97316', weight: 4, opacity: 0.8, dashArray: '10, 5' }} />
 }
 
+// ── Preview Map ───────────────────────────────────────────────────────────────
+function PreviewMap({ startLocation, destinations, selectedLocations }) {
+  const locations = [startLocation, ...destinations]
+    .filter(d => d && d.trim() && selectedLocations[d])
+    .map((d, i) => ({ name: d, lat: selectedLocations[d].lat, lng: selectedLocations[d].lng, isStart: i === 0 }))
+    
+  const uniqueLocs = []
+  const seen = new Set()
+  locations.forEach(l => {
+     const key = `${l.lat},${l.lng}`
+     if(!seen.has(key)) { seen.add(key); uniqueLocs.push(l) }
+  })
+
+  const center = uniqueLocs.length > 0 ? [uniqueLocs[0].lat, uniqueLocs[0].lng] : [20.5937, 78.9629]
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden border border-white/10 flex flex-col h-full min-h-[600px]">
+       <div className="p-5 border-b border-white/10 bg-white/5">
+         <h3 className="text-white font-semibold flex items-center gap-2"><FiMap className="text-saffron-400" /> Live Map Preview</h3>
+         <p className="text-slate-400 text-sm mt-1">Map updates when you select a destination</p>
+       </div>
+       <div className="flex-1 relative bg-[#1e293b]">
+         <MapContainer center={center} zoom={uniqueLocs.length > 0 ? 5 : 4} style={{ height: '100%', width: '100%', background: '#1e293b' }}>
+           <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+           />
+           {uniqueLocs.map((loc, i) => (
+              <Marker key={i} position={[loc.lat, loc.lng]} icon={makeNumberedIcon(loc.isStart ? 'S' : i, loc.isStart ? '#10b981' : '#ff7a0f')}>
+                 <Popup><div className="text-sm"><strong>{loc.name}</strong></div></Popup>
+              </Marker>
+           ))}
+           <FitBounds locations={uniqueLocs} />
+         </MapContainer>
+       </div>
+    </div>
+  )
+}
+
 // ── Loading overlay ───────────────────────────────────────────────────────────
 function LoadingOverlay({ step }) {
   return (
@@ -667,6 +706,95 @@ function AIInsightsPanel({ aiReasoning, summary }) {
   )
 }
 
+// ── City Autocomplete ────────────────────────────────────────────────────────
+function CityAutocomplete({ value, onChange, onSelectLocation, placeholder, className }) {
+  const [query, setQuery] = useState(value || '');
+  const [suggestions, setSuggestions] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const wrapperRef = useRef(null);
+  const skipFetch = useRef(false);
+
+  useEffect(() => { 
+    if (value !== query) {
+      setQuery(value || '');
+    }
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setIsOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    if (skipFetch.current) {
+      skipFetch.current = false;
+      return;
+    }
+    
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', India')}&limit=5`);
+        const data = await res.json();
+        setSuggestions(data || []);
+        setIsOpen(true);
+      } catch(e) {}
+      setLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const handleSelect = (s) => {
+    const name = s.display_name.split(',')[0];
+    skipFetch.current = true;
+    setQuery(name);
+    onChange(name);
+    if (onSelectLocation) {
+      onSelectLocation({ name, lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
+    }
+    setIsOpen(false);
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <input
+        type="text"
+        value={query}
+        onChange={e => {
+          setQuery(e.target.value);
+          onChange(e.target.value);
+        }}
+        onFocus={() => { if(suggestions.length > 0) setIsOpen(true) }}
+        placeholder={placeholder}
+        className={className}
+      />
+      {loading && <div className="absolute right-3 top-3.5 text-[10px] uppercase font-bold text-saffron-400">Searching...</div>}
+      {isOpen && suggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+          {suggestions.map((s, idx) => (
+            <div 
+              key={idx} 
+              onClick={() => handleSelect(s)}
+              className="px-4 py-2.5 hover:bg-white/5 cursor-pointer text-sm text-slate-200 border-b border-white/5 last:border-0"
+            >
+              <div className="font-medium text-white">{s.display_name.split(',')[0]}</div>
+              <div className="text-xs text-slate-400 truncate">{s.display_name}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ════════════════════════════════════════════════════════════════════════════════
@@ -698,6 +826,12 @@ export default function TripPlannerPage() {
   const [extraReqs,  setExtraReqs]  = useState('')
   const [showExtra,  setShowExtra]  = useState(false)
 
+  const [selectedLocations, setSelectedLocations] = useState({}) // Cache coordinates chosen from dropdown
+
+  const handleLocationSelect = (locObj) => {
+    setSelectedLocations(prev => ({ ...prev, [locObj.name]: { lat: locObj.lat, lng: locObj.lng } }))
+  }
+
   // ── Result state ────────────────────────────────────────────────────────────
   const [result,      setResult]      = useState(null)   // MultiItineraryResponse
   const [activeTab,   setActiveTab]   = useState('overview')
@@ -719,6 +853,7 @@ export default function TripPlannerPage() {
     mutationFn: () => generateMultiItinerary({
       startLocation,
       destinations: destinations.filter(Boolean),
+      selectedLocations,
       startDate: startDate || undefined,
       days,
       travelers,
@@ -843,26 +978,27 @@ export default function TripPlannerPage() {
           <div className="space-y-5">
 
             {/* Starting Location */}
-            <div className="glass-card rounded-2xl p-6">
+            <div className="glass-card rounded-2xl p-6 relative z-50">
               <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
                 <FiNavigation className="text-saffron-400" /> Starting Point
               </h2>
-              <input
-                type="text" value={startLocation}
-                onChange={e => setStartLocation(e.target.value)}
+              <CityAutocomplete
+                value={startLocation}
+                onChange={val => setStartLocation(val)}
+                onSelectLocation={handleLocationSelect}
                 placeholder="e.g. Hyderabad, Delhi, Mumbai"
                 className="input-field w-full px-4 py-2.5 rounded-xl text-sm"
               />
             </div>
 
             {/* Destinations */}
-            <div className="glass-card rounded-2xl p-6">
+            <div className="glass-card rounded-2xl p-6 relative z-40">
               <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
                 <FiMapPin className="text-saffron-400" /> Destinations
               </h2>
               <div className="space-y-2">
                 {destinations.map((d, i) => (
-                  <div key={i} className="flex gap-2 items-center">
+                  <div key={i} className="flex gap-2 items-center relative" style={{ zIndex: 50 - i }}>
                     <div className="flex flex-col gap-0.5">
                       <button onClick={() => moveUp(i)} className="reorder-btn" title="Move up">
                         <FiChevronUp className="w-3 h-3" />
@@ -874,9 +1010,10 @@ export default function TripPlannerPage() {
                     <div className="w-6 h-6 rounded-full bg-saffron-500/20 text-saffron-400 text-xs flex items-center justify-center font-bold flex-shrink-0">
                       {i + 1}
                     </div>
-                    <input
-                      type="text" value={d}
-                      onChange={e => updateDestination(i, e.target.value)}
+                    <CityAutocomplete
+                      value={d}
+                      onChange={val => updateDestination(i, val)}
+                      onSelectLocation={handleLocationSelect}
                       placeholder={`Destination ${i + 1} (e.g. Goa, Hampi)`}
                       className="input-field flex-1 px-4 py-2.5 rounded-xl text-sm"
                     />
@@ -1078,7 +1215,7 @@ export default function TripPlannerPage() {
           </div>
 
           {/* ══ RESULTS PANEL ══ */}
-          <div className="xl:col-span-2 space-y-5">
+          <div className="xl:col-span-2 space-y-5 h-full">
             {isPending ? (
               <LoadingOverlay step={loadingStep} />
             ) : result ? (
@@ -1155,8 +1292,8 @@ export default function TripPlannerPage() {
                       <MapContainer center={mapCenter} zoom={5}
                         style={{ height: '100%', width: '100%', background: '#1e293b' }}>
                         <TileLayer
-                          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                          attribution='&copy; OpenStreetMap &copy; CARTO'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         />
                         {mapLocations.map((loc, i) => (
                           <Marker key={i} position={[loc.lat, loc.lng]}
@@ -1216,22 +1353,7 @@ export default function TripPlannerPage() {
               </>
             ) : (
               /* Empty state */
-              <div className="glass-card rounded-2xl p-16 text-center flex flex-col items-center justify-center gap-5 border border-dashed border-white/20 min-h-[500px]">
-                <div className="w-20 h-20 rounded-full bg-saffron-500/10 flex items-center justify-center">
-                  <FiCpu className="w-10 h-10 text-saffron-400" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-lg mb-2">Your AI Itinerary will appear here</p>
-                  <p className="text-slate-500 text-sm max-w-xs mx-auto">
-                    Fill in your starting point, add destinations, choose your preferences and hit <strong className="text-saffron-400">Generate</strong>.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                  {['📅 Day-by-day plan', '🗺️ Optimized route', '💰 Budget tracker', '📍 Interactive map'].map(f => (
-                    <div key={f} className="text-xs text-slate-500 glass-card rounded-xl p-3 border border-white/10">{f}</div>
-                  ))}
-                </div>
-              </div>
+              <PreviewMap startLocation={startLocation} destinations={destinations} selectedLocations={selectedLocations} />
             )}
           </div>
         </div>
