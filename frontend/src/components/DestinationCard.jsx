@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FiMapPin, FiStar, FiPlus, FiCheck, FiBook } from 'react-icons/fi'
+import { FiMapPin, FiStar, FiPlus, FiCheck, FiBook, FiNavigation } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { useTripStore } from '../store/tripStore'
 
@@ -18,7 +18,7 @@ function StarRating({ rating }) {
 }
 
 export default function DestinationCard({ destination }) {
-  const { id, name, state, city, imageUrl, categories, averageRating, reviewCount, entryFee } = destination
+  const { id, name, state, city, imageUrl, categories, averageRating, reviewCount, entryFee, distanceKm } = destination
   const { addToTrip, removeFromTrip, isInTrip } = useTripStore()
   const inTrip = isInTrip(id)
 
@@ -54,8 +54,16 @@ export default function DestinationCard({ destination }) {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-navy-900/80 via-transparent to-transparent" />
 
+          {/* Distance from current location badge */}
+          {distanceKm != null && !isNaN(distanceKm) && (
+            <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/30 z-10 shadow-lg">
+              <FiNavigation className="w-3 h-3 text-emerald-400" />
+              <span>{distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${Math.round(distanceKm)} km`} away</span>
+            </div>
+          )}
+
           {/* Entry fee badge */}
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 z-10">
             {entryFee === 0 ? (
               <span className="badge badge-emerald">Free Entry</span>
             ) : (

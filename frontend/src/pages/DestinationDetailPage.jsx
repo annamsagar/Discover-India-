@@ -1,10 +1,11 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { FiMapPin, FiStar, FiClock, FiDollarSign, FiArrowLeft, FiSend } from 'react-icons/fi'
+import { FiMapPin, FiStar, FiClock, FiDollarSign, FiArrowLeft, FiSend, FiCrosshair, FiNavigation, FiExternalLink } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { destinationApi, reviewApi } from '../services/api.service'
 import { useAuthStore } from '../store/authStore'
+import { getCurrentUserLocation, calculateHaversineDistanceKm } from '../lib/geolocation'
 
 function StarPicker({ value, onChange }) {
   const [hover, setHover] = useState(0)
@@ -28,9 +29,25 @@ function StarPicker({ value, onChange }) {
 
 export default function DestinationDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isAuthenticated } = useAuthStore()
   const [review, setReview] = useState({ rating: 0, comment: '' })
+  const [userLoc, setUserLoc] = useState(null)
+  const [locating, setLocating] = useState(false)
+
+  const handleGetDistance = async () => {
+    setLocating(true)
+    try {
+      const loc = await getCurrentUserLocation()
+      setUserLoc(loc)
+      toast.success(`Distance calculated from ${loc.cityName} 📍`)
+    } catch (err) {
+      toast.error(err.message || 'Could not detect your current location.')
+    } finally {
+      setLocating(false)
+    }
+  }
 
   const { data: destination, isLoading } = useQuery({
     queryKey: ['destination', id],
@@ -168,9 +185,58 @@ export default function DestinationDetailPage() {
             </div>
           )}
 
-          {/* Nearby Services */}
+          {/* Nearby Services & Navigation */}
           <div className="mt-8 pt-8 border-t border-white/10">
-            <h3 className="text-xl font-bold text-white mb-4">Nearby Services</h3>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <h3 className="text-xl font-bold text-white">Travel & Services</h3>
+              <button
+                type="button"
+                onClick={handleGetDistance}
+                disabled={locating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-saffron-500/15 border border-saffron-500/30 text-saffron-300 hover:bg-saffron-500/25 transition-all text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                <FiCrosshair className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />
+                <span>{locating ? 'Locating GPS…' : userLoc ? 'Recalculate Distance' : 'Distance from Current Location'}</span>
+              </button>
+            </div>
+
+            {/* Distance from current location pill */}
+            {userLoc && destination.latitude && destination.longitude && (() => {
+              const km = calculateHaversineDistanceKm(userLoc.lat, userLoc.lng, destination.latitude, destination.longitude)
+              const approxHours = (km / 60).toFixed(1)
+              return (
+                <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-transparent border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <FiNavigation className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-semibold">
+                        ~{km < 1 ? `${Math.round(km * 1000)} m` : `${Math.round(km)} km`} from your location ({userLoc.cityName})
+                      </p>
+                      <p className="text-slate-400 text-xs">Approx. {approxHours} hrs drive by road (straight line {Math.round(km)} km)</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${userLoc.lat},${userLoc.lng}&destination=${destination.latitude},${destination.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-md"
+                    >
+                      <FiExternalLink className="w-3.5 h-3.5" /> Google Directions
+                    </a>
+                    <button
+                      onClick={() => navigate('/planner', { state: { tripItems: [destination] } })}
+                      className="px-3 py-2 rounded-xl bg-saffron-500 hover:bg-saffron-600 text-white text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-md"
+                    >
+                      🗺️ Plan Trip
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="flex flex-wrap gap-4">
               <a
                 href={`https://www.google.com/maps/search/Hotels+near+${destination.latitude},${destination.longitude}`}

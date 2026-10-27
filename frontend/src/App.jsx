@@ -48,6 +48,7 @@ export default function App() {
               <Route path="/register"            element={<RegisterPage />} />
               <Route path="/chatbot"             element={<ChatbotPage />} />
               <Route path="/planner"             element={<TripPlannerPage />} />
+              <Route path="/route-planner"       element={<Navigate to="/planner" replace />} />
               <Route path="/my-trips"            element={<PrivateRoute><MyTripsPage /></PrivateRoute>} />
               <Route path="/shared/:token"        element={<SharedItineraryPage />} />
               <Route path="/profile"             element={<PrivateRoute><ProfilePage /></PrivateRoute>} />

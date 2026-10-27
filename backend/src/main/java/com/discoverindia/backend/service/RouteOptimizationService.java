@@ -94,24 +94,68 @@ public class RouteOptimizationService {
         List<GeoPoint> result = new ArrayList<>();
         for (String name : names) {
             GeoPoint pt = null;
-            if (selectedLocations != null && selectedLocations.containsKey(name)) {
-                Map<String, Double> coords = selectedLocations.get(name);
-                if (coords != null && coords.containsKey("lat") && coords.containsKey("lng")) {
-                    pt = new GeoPoint(name, coords.get("lat"), coords.get("lng"));
+            // 1. Direct or fuzzy lookup in selectedLocations cache
+            if (selectedLocations != null) {
+                if (selectedLocations.containsKey(name)) {
+                    Map<String, Double> coords = selectedLocations.get(name);
+                    if (coords != null && coords.containsKey("lat") && coords.containsKey("lng")) {
+                        pt = new GeoPoint(name, coords.get("lat"), coords.get("lng"));
+                    }
+                } else {
+                    for (Map.Entry<String, Map<String, Double>> entry : selectedLocations.entrySet()) {
+                        String key = entry.getKey();
+                        if (key != null && (name.equalsIgnoreCase(key) || name.contains(key) || key.contains(name))) {
+                            Map<String, Double> coords = entry.getValue();
+                            if (coords != null && coords.containsKey("lat") && coords.containsKey("lng")) {
+                                pt = new GeoPoint(name, coords.get("lat"), coords.get("lng"));
+                                break;
+                            }
+                        }
+                    }
                 }
             }
+
+            // 2. Parse embedded coordinates e.g. "Current Location (17.385, 78.486)"
             if (pt == null) {
-                pt = geocode(name);
+                pt = tryParseCoordinates(name);
             }
+
+            // 3. Geocode via Nominatim (extract city if prefixed with "Current Location")
+            if (pt == null) {
+                String cleanName = name;
+                if (cleanName.toLowerCase().contains("current location")) {
+                    cleanName = cleanName.replaceAll("(?i)current location\\s*\\(?|\\)", "").trim();
+                }
+                if (!cleanName.isBlank()) {
+                    GeoPoint resolved = geocode(cleanName);
+                    if (resolved != null) {
+                        pt = new GeoPoint(name, resolved.lat(), resolved.lng());
+                    }
+                }
+            }
+
             if (pt != null) {
                 result.add(pt);
             } else {
                 log.warn("Could not geocode: {}", name);
-                // Add a null-island placeholder so indexing stays consistent
-                result.add(new GeoPoint(name, 20.5937, 78.9629)); // centre of India as fallback
+                // Add a center-of-India placeholder so indexing stays consistent
+                result.add(new GeoPoint(name, 20.5937, 78.9629));
             }
         }
         return result;
+    }
+
+    private GeoPoint tryParseCoordinates(String text) {
+        if (text == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(-?\\d+\\.\\d+)[,\\s]+(-?\\d+\\.\\d+)").matcher(text);
+        if (m.find()) {
+            try {
+                double lat = Double.parseDouble(m.group(1));
+                double lng = Double.parseDouble(m.group(2));
+                return new GeoPoint(text, lat, lng);
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

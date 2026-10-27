@@ -15,12 +15,20 @@ public interface DestinationRepository extends JpaRepository<Destination, Long> 
 
     Page<Destination> findByStateIgnoreCase(String state, Pageable pageable);
 
-    @Query("SELECT d FROM Destination d WHERE " +
+    @Query("SELECT DISTINCT d FROM Destination d LEFT JOIN d.categories c WHERE " +
            "LOWER(d.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(d.name) LIKE LOWER(CONCAT('%', :altQuery, '%')) OR " +
            "LOWER(d.state) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(d.city) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(d.description) LIKE LOWER(CONCAT('%', :query, '%'))")
-    Page<Destination> searchDestinations(@Param("query") String query, Pageable pageable);
+           "LOWER(d.city) LIKE LOWER(CONCAT('%', :altQuery, '%')) OR " +
+           "LOWER(d.description) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(d.description) LIKE LOWER(CONCAT('%', :altQuery, '%')) OR " +
+           "LOWER(c) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(c) LIKE LOWER(CONCAT('%', :altQuery, '%'))")
+    Page<Destination> searchDestinations(
+            @Param("query") String query,
+            @Param("altQuery") String altQuery,
+            Pageable pageable);
 
     @Query("SELECT d FROM Destination d ORDER BY d.averageRating DESC")
     List<Destination> findTopRated(Pageable pageable);

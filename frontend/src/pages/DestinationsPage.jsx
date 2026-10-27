@@ -3,11 +3,12 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   FiSearch, FiFilter, FiX, FiChevronLeft, FiChevronRight,
-  FiShoppingBag, FiTrash2, FiMap, FiMapPin,
+  FiShoppingBag, FiTrash2, FiMap, FiMapPin, FiCrosshair,
 } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { destinationApi } from '../services/api.service'
 import { useTripStore } from '../store/tripStore'
+import { getCurrentUserLocation, calculateHaversineDistanceKm } from '../lib/geolocation'
 import DestinationCard from '../components/DestinationCard'
 import SkeletonCard from '../components/SkeletonCard'
 
@@ -23,6 +24,17 @@ const SORT_OPTIONS = [
   { value: 'name,asc',           label: 'Name A–Z' },
   { value: 'name,desc',          label: 'Name Z–A' },
   { value: 'averageRating,desc', label: 'Highest Rated' },
+]
+
+const QUICK_FILTERS = [
+  { label: 'All', query: '' },
+  { label: '🛕 Temples', query: 'temple' },
+  { label: '🏙️ Cities', query: 'city' },
+  { label: '🏰 Heritage & Forts', query: 'heritage' },
+  { label: '🏖️ Beaches', query: 'beach' },
+  { label: '⛰️ Hill Stations', query: 'hill station' },
+  { label: '🌿 Nature & Wildlife', query: 'nature' },
+  { label: '🏛️ UNESCO Sites', query: 'unesco' },
 ]
 
 // ── Trip Cart Drawer ──────────────────────────────────────────────────────────
@@ -130,22 +142,42 @@ function TripCartDrawer({ open, onClose }) {
 export default function DestinationsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch]   = useState(searchParams.get('search') || '')
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') || '')
   const [state, setState]     = useState(searchParams.get('state')  || 'All States')
   const [sort, setSort]       = useState('name,asc')
   const [page, setPage]       = useState(0)
   const [showFilter, setShowFilter] = useState(false)
   const [cartOpen, setCartOpen]     = useState(false)
+  const [userLocation, setUserLocation] = useState(null)
+  const [sortByDistance, setSortByDistance] = useState(false)
+  const [locating, setLocating]     = useState(false)
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Sync URL search params
+  useEffect(() => {
+    const paramSearch = searchParams.get('search') || ''
+    if (paramSearch !== search) setSearch(paramSearch)
+    const paramState = searchParams.get('state') || 'All States'
+    if (paramState !== state) setState(paramState)
+  }, [searchParams])
 
   const { tripItems } = useTripStore()
   const [sortBy, sortDir] = sort.split(',')
 
-  const queryKey = ['destinations', { search, state, sort, page }]
+  const queryKey = ['destinations', { search: debouncedSearch, state, sort, page }]
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey,
     queryFn: async () => {
-      if (search) {
-        const res = await destinationApi.search(search, { page, size: 12 })
+      if (debouncedSearch) {
+        const res = await destinationApi.search(debouncedSearch, { page, size: 12 })
         return res.data
       }
       if (state && state !== 'All States') {
@@ -158,12 +190,12 @@ export default function DestinationsPage() {
     keepPreviousData: true,
   })
 
-  useEffect(() => { setPage(0) }, [search, state, sort])
+  useEffect(() => { setPage(0) }, [debouncedSearch, state, sort])
 
   const handleSearchSubmit = (e) => {
     e.preventDefault()
     setSearchParams(search ? { search } : {})
-    setState('All States')
+    if (state !== 'All States') setState('All States')
   }
 
   const handleStateChange = (s) => {
@@ -176,13 +208,48 @@ export default function DestinationsPage() {
     setSearch('')
     setState('All States')
     setSort('name,asc')
+    setSortByDistance(false)
     setSearchParams({})
   }
 
-  const destinations = data?.content || []
-  const totalPages   = data?.totalPages || 0
-  const totalItems   = data?.totalElements || 0
-  const hasFilters   = search || state !== 'All States'
+  const handleToggleNearMe = async () => {
+    if (sortByDistance) {
+      setSortByDistance(false)
+      return
+    }
+
+    if (userLocation) {
+      setSortByDistance(true)
+      toast.success(`Sorting by distance from ${userLocation.cityName} 📍`)
+      return
+    }
+
+    setLocating(true)
+    try {
+      const loc = await getCurrentUserLocation()
+      setUserLocation(loc)
+      setSortByDistance(true)
+      toast.success(`Location detected: ${loc.displayName} 📍`)
+    } catch (err) {
+      toast.error(err.message || 'Could not detect your current location.')
+    } finally {
+      setLocating(false)
+    }
+  }
+
+  const rawDestinations = data?.content || []
+  const totalPages      = data?.totalPages || 0
+  const totalItems      = data?.totalElements || 0
+  const hasFilters      = search || state !== 'All States' || sortByDistance
+
+  const destinations = (sortByDistance && userLocation)
+    ? [...rawDestinations]
+        .map(d => ({
+          ...d,
+          distanceKm: calculateHaversineDistanceKm(userLocation.lat, userLocation.lng, d.latitude, d.longitude),
+        }))
+        .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
+    : rawDestinations
 
   return (
     <div className="page-enter min-h-screen pt-24 pb-20">
@@ -217,17 +284,34 @@ export default function DestinationsPage() {
         </div>
 
         {/* Search + Controls */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <form onSubmit={handleSearchSubmit} className="flex-1 relative">
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input
               id="destinations-search"
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, city, or state…"
-              className="input-field w-full pl-10 pr-4 py-3 rounded-xl text-sm"
+              onChange={(e) => {
+                const val = e.target.value
+                setSearch(val)
+                if (!val) setSearchParams({})
+              }}
+              placeholder="Search cities, places, temples (e.g. Tirupati, Delhi, Kedarnath, Jaipur)…"
+              className="input-field w-full pl-10 pr-10 py-3 rounded-xl text-sm"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('')
+                  setSearchParams({})
+                }}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-full transition-colors"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
           </form>
 
           <select
@@ -247,12 +331,70 @@ export default function DestinationsPage() {
             <FiFilter className="w-4 h-4" /> Filter by State
           </button>
 
+          <button
+            type="button"
+            onClick={handleToggleNearMe}
+            disabled={locating}
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all border cursor-pointer ${
+              sortByDistance
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-lg shadow-emerald-500/10'
+                : 'glass-card border-white/10 text-slate-300 hover:border-saffron-500/30'
+            }`}
+            title="Sort destinations closest to your GPS position"
+          >
+            <FiCrosshair className={`w-4 h-4 ${locating ? 'animate-spin text-saffron-400' : 'text-emerald-400'}`} />
+            <span>{locating ? 'Detecting GPS…' : sortByDistance ? 'Near Me (Active)' : 'Near Me'}</span>
+          </button>
+
           {hasFilters && (
             <button onClick={clearFilters} className="flex items-center gap-1 px-3 py-3 rounded-xl text-red-400 hover:text-red-300 glass-card border border-red-400/20 text-sm transition-all">
               <FiX className="w-4 h-4" /> Clear
             </button>
           )}
         </div>
+
+        {/* Quick category filter chips */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider mr-1">Quick Filter:</span>
+          {QUICK_FILTERS.map((f) => {
+            const isActive = (!f.query && !search) || (f.query && search.toLowerCase().includes(f.query))
+            return (
+              <button
+                key={f.label}
+                type="button"
+                onClick={() => {
+                  setSearch(f.query)
+                  setSearchParams(f.query ? { search: f.query } : {})
+                  if (state !== 'All States') setState('All States')
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border cursor-pointer ${
+                  isActive
+                    ? 'bg-saffron-500 border-saffron-500 text-white shadow-md shadow-saffron-500/20'
+                    : 'glass-card border-white/10 text-slate-300 hover:text-white hover:border-white/20'
+                }`}
+              >
+                {f.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Proximity sorting banner */}
+        {sortByDistance && userLocation && (
+          <div className="mb-5 flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+              <span>Sorting by proximity to: <strong className="text-white">{userLocation.displayName}</strong></span>
+            </div>
+            <button
+              onClick={() => setSortByDistance(false)}
+              className="text-slate-400 hover:text-white px-2 py-0.5"
+              title="Disable proximity sorting"
+            >
+              ✕ Turn off
+            </button>
+          </div>
+        )}
 
         {/* State filter panel */}
         {showFilter && (

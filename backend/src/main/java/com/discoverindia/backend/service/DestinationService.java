@@ -32,7 +32,49 @@ public class DestinationService {
     }
 
     public Page<DestinationResponse> searchDestinations(String query, Pageable pageable) {
-        return destinationRepository.searchDestinations(query, pageable).map(this::toResponse);
+        String trimmed = (query != null) ? query.trim() : "";
+        if (trimmed.isEmpty()) {
+            return destinationRepository.findAll(pageable).map(this::toResponse);
+        }
+
+        String altQuery = getStemOrAlternative(trimmed);
+        Page<Destination> page = destinationRepository.searchDestinations(trimmed, altQuery, pageable);
+
+        // If no results and query contains multiple words (e.g. "temple in Delhi", "places Jaipur")
+        if (page.isEmpty() && trimmed.contains(" ")) {
+            String[] words = trimmed.split("\\s+");
+            List<String> keywords = java.util.Arrays.stream(words)
+                    .map(String::trim)
+                    .map(String::toLowerCase)
+                    .filter(w -> !w.equals("in") && !w.equals("at") && !w.equals("the") && !w.equals("of") && !w.equals("and") && !w.equals("to") && !w.equals("near") && w.length() > 2)
+                    .toList();
+
+            for (String kw : keywords) {
+                String kwAlt = getStemOrAlternative(kw);
+                Page<Destination> kwPage = destinationRepository.searchDestinations(kw, kwAlt, pageable);
+                if (!kwPage.isEmpty()) {
+                    return kwPage.map(this::toResponse);
+                }
+            }
+        }
+
+        return page.map(this::toResponse);
+    }
+
+    private String getStemOrAlternative(String word) {
+        String lower = word.toLowerCase();
+        if (lower.endsWith("temples")) return word.substring(0, word.length() - 1);
+        if (lower.endsWith("temple")) return word + "s";
+        if (lower.endsWith("cities")) return word.substring(0, word.length() - 3) + "y";
+        if (lower.endsWith("city")) return word.substring(0, word.length() - 1) + "ies";
+        if (lower.endsWith("places")) return word.substring(0, word.length() - 1);
+        if (lower.endsWith("place")) return word + "s";
+        if (lower.endsWith("beaches")) return word.substring(0, word.length() - 2);
+        if (lower.endsWith("beach")) return word + "es";
+        if (lower.endsWith("forts") || lower.endsWith("palaces") || lower.endsWith("monuments")) {
+            return word.substring(0, word.length() - 1);
+        }
+        return word;
     }
 
     public Page<DestinationResponse> getDestinationsByState(String state, Pageable pageable) {

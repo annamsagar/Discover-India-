@@ -8,7 +8,7 @@ import {
   FiAlertTriangle, FiCheckCircle, FiClock, FiRefreshCw,
   FiSun, FiSunrise, FiMoon, FiTruck, FiHome, FiX,
   FiZap, FiInfo, FiArrowRight, FiTrendingDown, FiTrendingUp,
-  FiTarget, FiAward, FiActivity,
+  FiTarget, FiAward, FiActivity, FiCrosshair, FiCompass,
 } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
@@ -17,6 +17,7 @@ import L from 'leaflet'
 import { useAuthStore } from '../store/authStore'
 import { useTripStore } from '../store/tripStore'
 import { generateMultiItinerary, saveItinerary, shareItinerary } from '../services/multiItineraryService'
+import { getCurrentUserLocation } from '../lib/geolocation'
 
 // Fix Leaflet icons in Vite
 delete L.Icon.Default.prototype._getIconUrl
@@ -707,11 +708,12 @@ function AIInsightsPanel({ aiReasoning, summary }) {
 }
 
 // ── City Autocomplete ────────────────────────────────────────────────────────
-function CityAutocomplete({ value, onChange, onSelectLocation, placeholder, className }) {
+function CityAutocomplete({ value, onChange, onSelectLocation, placeholder, className, showGpsOption = true }) {
   const [query, setQuery] = useState(value || '');
   const [suggestions, setSuggestions] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const wrapperRef = useRef(null);
   const skipFetch = useRef(false);
 
@@ -763,22 +765,66 @@ function CityAutocomplete({ value, onChange, onSelectLocation, placeholder, clas
     setIsOpen(false);
   }
 
+  const handleCurrentLocationClick = async (e) => {
+    e?.stopPropagation?.();
+    setLocating(true);
+    try {
+      const loc = await getCurrentUserLocation();
+      skipFetch.current = true;
+      setQuery(loc.displayName);
+      onChange(loc.displayName);
+      if (onSelectLocation) {
+        onSelectLocation({ name: loc.displayName, lat: loc.lat, lng: loc.lng, isCurrent: true });
+      }
+      toast.success(`Location detected: ${loc.displayName} 📍`);
+      setIsOpen(false);
+    } catch (err) {
+      toast.error(err.message || 'Could not fetch current location.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
   return (
     <div ref={wrapperRef} className="relative w-full">
-      <input
-        type="text"
-        value={query}
-        onChange={e => {
-          setQuery(e.target.value);
-          onChange(e.target.value);
-        }}
-        onFocus={() => { if(suggestions.length > 0) setIsOpen(true) }}
-        placeholder={placeholder}
-        className={className}
-      />
-      {loading && <div className="absolute right-3 top-3.5 text-[10px] uppercase font-bold text-saffron-400">Searching...</div>}
-      {isOpen && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value);
+            onChange(e.target.value);
+          }}
+          onFocus={() => { setIsOpen(true) }}
+          placeholder={placeholder}
+          className={`${className} ${showGpsOption ? 'pr-10' : ''}`}
+        />
+        {showGpsOption && (
+          <button
+            type="button"
+            onClick={handleCurrentLocationClick}
+            disabled={locating}
+            title="Use current GPS location"
+            className="absolute right-2.5 p-1.5 rounded-lg text-slate-400 hover:text-saffron-400 hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <FiCrosshair className={`w-4 h-4 ${locating ? 'animate-spin text-saffron-400' : ''}`} />
+          </button>
+        )}
+      </div>
+      {loading && <div className="absolute right-10 top-3.5 text-[10px] uppercase font-bold text-saffron-400 pointer-events-none">Searching...</div>}
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-64 overflow-y-auto">
+          {showGpsOption && (
+            <div
+              onClick={handleCurrentLocationClick}
+              className="px-4 py-2.5 bg-gradient-to-r from-saffron-500/10 to-amber-500/10 hover:from-saffron-500/20 hover:to-amber-500/20 text-saffron-300 hover:text-saffron-200 cursor-pointer text-xs font-semibold border-b border-white/10 flex items-center gap-2 transition-all"
+            >
+              <FiCrosshair className={`w-3.5 h-3.5 text-saffron-400 flex-shrink-0 ${locating ? 'animate-spin' : ''}`} />
+              <div className="flex-1 truncate">
+                {locating ? 'Acquiring GPS location…' : '📍 Use Current Location'}
+              </div>
+            </div>
+          )}
           {suggestions.map((s, idx) => (
             <div 
               key={idx} 
@@ -810,6 +856,9 @@ export default function TripPlannerPage() {
   const [startLocation, setStartLocation] = useState(
     seedItems.length > 0 ? (seedItems[0]?.city || '') : ''
   )
+  const [isStartCurrentLocation, setIsStartCurrentLocation] = useState(false)
+  const [locatingStart, setLocatingStart] = useState(false)
+
   const [destinations, setDestinations] = useState(
     seedItems.length > 0 ? seedItems.map(d => d.name) : ['']
   )
@@ -830,6 +879,24 @@ export default function TripPlannerPage() {
 
   const handleLocationSelect = (locObj) => {
     setSelectedLocations(prev => ({ ...prev, [locObj.name]: { lat: locObj.lat, lng: locObj.lng } }))
+  }
+
+  const handleUseCurrentLocationAsStart = async () => {
+    setLocatingStart(true)
+    try {
+      const loc = await getCurrentUserLocation()
+      setStartLocation(loc.displayName)
+      setIsStartCurrentLocation(true)
+      setSelectedLocations(prev => ({
+        ...prev,
+        [loc.displayName]: { lat: loc.lat, lng: loc.lng },
+      }))
+      toast.success(`Starting point set to: ${loc.displayName} 📍`)
+    } catch (err) {
+      toast.error(err.message || 'Could not fetch current location.')
+    } finally {
+      setLocatingStart(false)
+    }
   }
 
   // ── Result state ────────────────────────────────────────────────────────────
@@ -979,16 +1046,49 @@ export default function TripPlannerPage() {
 
             {/* Starting Location */}
             <div className="glass-card rounded-2xl p-6 relative z-50">
-              <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
-                <FiNavigation className="text-saffron-400" /> Starting Point
-              </h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-white font-semibold flex items-center gap-2">
+                  <FiNavigation className="text-saffron-400" /> Starting Point
+                </h2>
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocationAsStart}
+                  disabled={locatingStart}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-saffron-500/15 border border-saffron-500/30 text-saffron-300 hover:bg-saffron-500/25 hover:border-saffron-500/50 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                  title="Detect GPS location and set as trip starting point"
+                >
+                  <FiCrosshair className={`w-3.5 h-3.5 text-saffron-400 ${locatingStart ? 'animate-spin' : ''}`} />
+                  <span>{locatingStart ? 'Detecting GPS…' : 'Use Current Location'}</span>
+                </button>
+              </div>
               <CityAutocomplete
                 value={startLocation}
-                onChange={val => setStartLocation(val)}
-                onSelectLocation={handleLocationSelect}
-                placeholder="e.g. Hyderabad, Delhi, Mumbai"
+                onChange={val => {
+                  setStartLocation(val)
+                  if (isStartCurrentLocation) setIsStartCurrentLocation(false)
+                }}
+                onSelectLocation={(locObj) => {
+                  handleLocationSelect(locObj)
+                  if (locObj.isCurrent) setIsStartCurrentLocation(true)
+                }}
+                placeholder="e.g. Hyderabad, Delhi, or Use Current Location"
                 className="input-field w-full px-4 py-2.5 rounded-xl text-sm"
+                showGpsOption={true}
               />
+              {isStartCurrentLocation && (
+                <div className="mt-2.5 flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                  <span className="truncate">Active GPS: <strong className="text-white">{startLocation}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => { setStartLocation(''); setIsStartCurrentLocation(false) }}
+                    className="ml-auto text-slate-400 hover:text-white px-1"
+                    title="Clear location"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Destinations */}

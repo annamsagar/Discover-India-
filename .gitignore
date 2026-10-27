@@ -4,6 +4,8 @@
 *.env.production
 
 # ── Java / Maven ──────────────────────────────────────────────────────────────
+jdk*/
+**/jdk*/
 target/
 *.class
 *.jar
